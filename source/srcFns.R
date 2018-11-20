@@ -368,3 +368,22 @@ qq.pretty <- function(pvals, maintitle) {
   mtext(expression("Observed "*-log[10]*"p"), side = 2, 
     line = 2.5, cex = 1.75)
 }
+
+#==============================================================================
+# convert SNP data into matrix form
+#==============================================================================
+
+convertToMatrix <- function(InputData) {
+  # converts SNP data into matrix
+  #
+  # Args:
+  #   InputData: list of objects with common tumor samples
+  # Returns:
+  #   
+  DF <- as.data.frame(lapply(InputData$mut, function(X) {
+    as.numeric(as.character(X))
+  }), stringsAsFactors = FALSE, optional = TRUE)
+  rownames(DF) <- colnames(InputData$gene)
+  mat <- as.matrix(DF)
+  return(mat)
+}
