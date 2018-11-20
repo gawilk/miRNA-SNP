@@ -204,6 +204,84 @@ removeOutliers <- function(G, M, S, data,
 }
 
 #==============================================================================
+# remove outliers while correcting for population substructure
+#==============================================================================
+
+removeOutliersPCA <- function(G, M, S, PCs, data, 
+                              method = c("cook.value", "expression"), 
+                              threshold = 1, phenotype = "01") {
+  # removes samples with no gene or miRNA expression
+  # then can additionally remove samples using cook's distance
+  # recomputes anova interaction p-value
+  # uses PCs from SNP genotype data in lm to correct for pop substructure
+  #
+  # Args:
+  #  G: gene name (string)
+  #  M: mirna name (string)
+  #  S: snp ID (affy ID string)
+  #  PCs: PCs from PCA
+  #  data: data to subset vectors in
+  #  method: remove outliers by
+  #       "expression" (just samples with no expression) 
+  #       "cook.value" (samples with no expression, plus 
+  #                   those have large cook's distance)
+  #  threshold: threshold for cook's distance, default 1
+  #  phenotype: which phenotype to calculate on?
+  # Returns:
+  #   interaction pvalue after outliers are removed
+  #
+  # subset to chosen phenotype (tumor)
+  DF <- data.frame("gene" = data$gene[G, ], 
+                   "mir" = data$mir[M, ], 
+                   "snp" = data$mut[[S]], 
+                   stringsAsFactors = FALSE)
+  DF$PC1 <- PCs[, 1];DF$PC2 <- PCs[,2]
+  DF <- DF[substr(rownames(DF), 14, 15) == phenotype, ]
+  # remove samples with no expression
+  minG <- with(data = DF, which(gene <= -13)) #very low gene expression
+  minM <- with(data = DF, which(mir == -2)) #no detectable miRNA expression
+  noexprsamps <- rownames(DF)[unique(c(minG, minM))]
+  if (length(noexprsamps) > 0) {
+    DF <- DF[!(rownames(DF) %in% noexprsamps), ]
+  }
+  # use tryCatch since removing samples may reduce number of genotypes
+  # reduction in genotype classes will break anova model 
+  if (method == "cook.value") {
+    removeSamples <- tryCatch({
+      lmfit <- lm(gene ~ PC1 + PC2 + mir * snp, data = DF)
+      cooksD <- cooks.distance(lmfit)
+      outsamps <- names(cooksD[cooksD > threshold])
+      alloutliers <- unique(c(noexprsamps, outsamps))
+      lmNEW <- lm(gene ~ PC1 + PC2 + mir * snp, 
+        data = DF[!(rownames(DF) %in% alloutliers), ])
+      return(list(p = anova(lmNEW)["mir:snp", "Pr(>F)"], 
+                  outliers = length(alloutliers)))
+    }, warning = function(war) {
+      print(paste("MY WARNING: ", war))
+      return(list(p = anova(lmNEW)["mir:snp", "Pr(>F)"], 
+                  outliers = length(alloutliers)))
+    }, error = function(err) {
+      print(paste("MY ERROR: ", err))
+      list("p" = NA, "outliers" = NA)
+    }, finally = {})
+  } else {
+    removeSamples <- tryCatch({
+      lmfit <- lm(gene ~ PC1 + PC2 + mir * snp, data = DF)
+      return(list("p" = anova(lmfit)["mir:snp", "Pr(>F)"], 
+                  "outliers" = length(noexprsamps)))
+    }, warning = function(war) {
+      print(paste("MY WARNING: ", war))
+      return(list("p" = anova(lmfit)["mir:snp", "Pr(>F)"], 
+                  "outliers" = length(noexprsamps)))
+    }, error = function(err) {
+      print(paste("MY ERROR: ", err))
+      list("p" = NA, "outliers" = NA)
+    }, finally = {})
+  }
+  removeSamples
+}
+
+#==============================================================================
 # trio plotting functions
 #==============================================================================
 
