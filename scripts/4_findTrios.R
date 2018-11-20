@@ -50,9 +50,8 @@ BRCAanova <- BRCAanova[!duplicated(BRCAanova[, c("miRNA", "gene", "snp")]), ]
 rm(BRCAstats1e5, SNPbyGene, SNPbyGene.uni, SNPbyGene.uni.int, pathGenes)
 
 #==============================================================================
-# save combos
+# save trios
 #==============================================================================
 
 # save
 save(BRCAanova, file = "data/BRCAanova.RData")
-

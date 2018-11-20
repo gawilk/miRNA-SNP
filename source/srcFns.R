@@ -114,6 +114,20 @@ runANOVA <- function(gene, mir, snp, data) {
   return(anova(lmfit)[3, 5])
 }
 
+runLMPCs <- function(gene, PCs, mir, snp, data) {
+  # runs linear model, lm(gene ~ PCs + miRNA*SNP), for gene-mir-snp combo
+  # Args: 
+  #   gene: gene name
+  #   PCs: principal components from SNP genotype data
+  #   mir: mir name
+  #   snp: snp id
+  #   data: getMatchingSamples output, list of assay data
+  # Returns:
+  #   interaction pvalue of snp modulating mir-gene relationship
+  lmfit <- lm(data$gene[gene, ] ~ PCs + data$mir[mir, ] * data$mut[[snp]])
+  return(anova(lmfit)["data$mir[mir, ]:data$mut[[snp]]", "Pr(>F)"])
+}
+
 #==============================================================================
 # interaction changes with removed outliers?
 #==============================================================================
