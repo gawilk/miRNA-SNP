@@ -1,4 +1,4 @@
-# finds RNAseq, miRNAseq, and SNP genotype data for tumor samples in common 
+# finds data for common tumor samples across RNAseq, miRNAseq, and SNP genotypes 
 # creates list of data objects to link them together
 #
 # script assumes RNAseq & miRNAseq for samples already available 
@@ -11,7 +11,7 @@
 load("data/BRCA.SNP.RData")
 load("data/BRCAesetTPM.RData")
 load("data/BRCA_miRNASeq_HiSeq.Rda")
-load("data/SNP/SNPbyGene.RData")
+load("data/SNPbyGene.RData")
 source("source/srcFns.R")
 library(Biobase)
 
@@ -20,7 +20,7 @@ library(Biobase)
 #==============================================================================
 
 # filter genes
-# get only genes assayed with SNP data which are on pathways
+# get only genes assayed with SNP data which are on KEGG pathways
 Genes <- Reduce(intersect, list(featureNames(BRCAesetTPM), 
                                 names(SNPbyGene), 
                                 unique(unlist(getPathwayGenes()))))
@@ -35,7 +35,7 @@ BRCA_miRNA <- BRCA_miRNASeq_HiSeq[apply(BRCA_miRNASeq_HiSeq, 1, function(X) {
 	sum(X > 1) > (0.5 * length(X))
 }), ]
 
-# combine
+# combine all
 BRCAdata <- getMatchingSamples(mutMat = BRCA.SNP[Muts, ], 
                            geneMat = exprs(BRCAesetTPM[Genes, ]), 
                            mirMat = log2(as.matrix(BRCA_miRNA) + 0.25),
@@ -47,7 +47,7 @@ BRCAdata <- getMatchingSamples(mutMat = BRCA.SNP[Muts, ],
 
 # filter SNPs by minor allele frequency (MAF)
 # minor allele should be be 1% or greater
-# need to add bounds to both sides
+# need to add bounds to both sides!
 BRCAdata$mut <- BRCAdata$mut[apply(BRCAdata$mut, 1, function(X) {
   MAF <- mean(X, na.rm = TRUE)/2
   (MAF <= 0.99) & (MAF >= 0.01)
@@ -66,7 +66,7 @@ BRCAdata$mut <- lapply(as.data.frame(t(BRCAdata$mut)), as.factor)
 # save object
 #==============================================================================
 
-save(BRCAdata, file = "scratch/data/SNP/BRCA/BRCAdata.RData")
+save(BRCAdata, file = "data/BRCAdata.RData")
 
 #==============================================================================
 # print filtration info
