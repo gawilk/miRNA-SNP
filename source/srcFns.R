@@ -379,11 +379,40 @@ convertToMatrix <- function(InputData) {
   # Args:
   #   InputData: list of objects with common tumor samples
   # Returns:
-  #   
   DF <- as.data.frame(lapply(InputData$mut, function(X) {
     as.numeric(as.character(X))
   }), stringsAsFactors = FALSE, optional = TRUE)
   rownames(DF) <- colnames(InputData$gene)
   mat <- as.matrix(DF)
   return(mat)
+}
+
+#==============================================================================
+# get race encodings of tumor samples
+#==============================================================================
+
+getRaces <- function(mat, TPMdata) { 
+  # gets races of each tumor samples from SNP genotypes
+  #
+  # Args:
+  #   mat: SNP genotype data
+  #   TPMdata: TPM Expression-Set with clinical info
+  # Returns:
+  #   races of tumor samples
+  ind <- match(rownames(mat), substr(sampleNames(TPMdata), 1, 15))
+  races <- pData(TPMdata)[ind, "race"]
+  cols <- sapply(races, function(X) {
+    if (X == "WHITE") {
+      1
+    } else if (X == "BLACK OR AFRICAN AMERICAN") {
+      2
+    } else if (X == "ASIAN") {
+      3
+    } else if (X == "AMERICAN INDIAN OR ALASKA NATIVE") {
+      4
+    } else {
+      5
+    }
+  })
+  return(cols)
 }
