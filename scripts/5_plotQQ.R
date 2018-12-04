@@ -1,11 +1,11 @@
-# plots qqplot of all SNP:miRNA interactions in TUMORS
-#
+# generates QQ-plot of all SNP:miRNA interactions (regQTLs) in TUMOR samples
+
 # change to project repo if necessary
-load("data/BRCAanovaTUMOR.RData")
+load("data/BRCAanovaTUMOR_PCA.RData")
 source("source/srcFun.R")
 
 #==============================================================================
 # generate plot
 #==============================================================================
 
-qq.pretty(na.omit(BRCAanovaTUMOR$pcookONE), "Breast")
+qq.pretty(na.omit(BRCAanovaTUMOR_PCA$pcookONE), "Breast")
