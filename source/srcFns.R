@@ -336,7 +336,7 @@ plotSNPTUMOR <- function(miRNA, gene, mut, data, filter = TRUE,
   #  trio interaction plot 
   require(ggplot2)
   require(gridExtra)
-  #prep dataframe for plotting
+  # prep dataframe for plotting
   DF <- data.frame(mir = data$mir[miRNA, ], 
                    gene = data$gene[gene, ],
                    mut = data$mut[[mut]], 
@@ -344,7 +344,7 @@ plotSNPTUMOR <- function(miRNA, gene, mut, data, filter = TRUE,
   DF <- DF[substr(rownames(DF), 14, 15) == "01", ]
   DF <- DF[!is.na(DF$mut), ]
   DF <- cleanDF(DF, method = method, threshold = threshold)
-  #get SNP genotype and rsID
+  # get SNP genotype and rsID
   snpinfo <- db[db$man_fsetid == mut, ]
   genotypes <- c(paste0(rep(snpinfo$allele_a, 2), collapse = ""), 
                  paste0(snpinfo$allele_a, snpinfo$allele_b), 
@@ -382,6 +382,131 @@ plotSNPTUMOR <- function(miRNA, gene, mut, data, filter = TRUE,
           axis.line.x = element_line(size = 0.5),
           axis.line.y = element_line(size = 0.5), 
           plot.title = element_text(hjust = 0.5))
+  return(g)
+}
+
+#==============================================================================
+# trio plotting functions with PCA substructure correction
+#==============================================================================
+
+createDF <- function(gene, PCs, mir, snp, data) {
+  # creates initial DF from which to clean
+  #
+  # Args:
+  #   gene: gene name string
+  #   PCs: PCA from SNP genotypes
+  #   mir: miRNA name string
+  #   snp: SNP Affy ID
+  #   data: list of data (expression + genotype)
+  # Returns:
+  #   dataframe from which to plot regQTL interactions
+  data.frame("gene" = data$gene[gene, ], 
+             "PC1" = PCs[, 1], 
+             "PC2" = PCs[, 2],
+             "mir" = data$mir[mir, ],
+             "mut" = data$mut[[snp]], stringsAsFactors = FALSE)
+}
+
+cleanDFPCA <- function(gene, PCs, mir, snp, data, 
+                       method = c("expression", "cook.value"),
+                      threshold = 1) {
+  # cleans DF w/ cook's distance or just removes samples w/ no expression
+  #
+  # Args:
+  #   gene: gene name string
+  #   PCs: PCA from SNP genotypes
+  #   mir: miRNA name string
+  #   snp: SNP Affy ID
+  #   data: list of data (expression + genotype)
+  #   method: remove outliers by cook's distance or samples with no expression?
+  #   threshold: value of cook's threshold (default 1)
+  # Returns:
+  #   dataframe with outliers removed 
+  DF <- createDF(gene = gene, PCs = PCs, mir = mir, snp = snp, data = data)
+  DF <- DF[substr(rownames(DF), 14, 15) == "01", ]
+  DF <- DF[!is.na(DF$mut), ]
+  minG <- with(data = DF, which(gene <= -13)) #very low gene expression
+  minM <- with(data = DF, which(mir == -2)) #no detectable miRNA expression
+  noexprsamps <- rownames(DF)[unique(c(minG, minM))]
+  if (length(noexprsamps) > 0) {
+    DF <- DF[!(rownames(DF) %in% noexprsamps), ]
+  }
+  if (method == "expression") {
+    return(DF)
+  } else {
+    lmfit <- lm(gene ~ PC1 + PC2 + mir * mut, data = DF)
+    cooksD <- cooks.distance(lmfit)
+    outsamps <- names(cooksD[cooksD > threshold])
+    DF <- DF[!(rownames(DF) %in% outsamps), ]
+    return(DF)
+  }
+}
+
+plotSNPTUMORPCA <- function(gene, PCs, mir, snp, data, 
+                         method = c("expression", "cook.value"), 
+                         threshold = 1, maintitle, db) {
+  # generates SNP interaction plot w/ PCA correction for only tumor samples 
+  # changes SNP AFFY ID to rsID
+  # also changes 0,1,2 encoding to actual genotype
+  #
+  # Args:
+  #   gene: gene name string
+  #   PCs: PCA from SNP genotypes
+  #   mir: miRNA name string
+  #   snp: SNP Affy ID
+  #   data: list of data (expression + genotype)
+  #   method: remove outliers by cook's distance or samples with no expression?
+  #   threshold: value of cook's threshold (default 1)
+  #   maintitle: title of plot
+  #   db: SNPdb.df for converting SNP Affy ID to rsID 
+  # Returns:
+  #   regQTL interaction plot 
+  require(ggplot2)
+  require(gridExtra)
+  DF <- cleanDFPCA(gene = gene, PCs = PCs, mir = mir, snp = snp, data = data, 
+                   method = method, threshold = threshold)
+  # get SNP genotype and rsID
+  snpinfo <- db[db$man_fsetid == snp, ]
+  genotypes <- c(paste0(rep(snpinfo$allele_a, 2), collapse = ""), 
+                 paste0(snpinfo$allele_a, snpinfo$allele_b), 
+                 paste0(rep(snpinfo$allele_b, 2), collapse = ""))
+  names(genotypes) <- c("0", "1", "2")
+  DF$mut <- as.factor(genotypes[as.character(DF$mut)])
+  genoTable <- table(DF$mut)
+  g <- ggplot(DF, aes(x = mir, y = gene)) +
+    geom_point(aes(shape = mut, color = mut), size = 1.25, alpha = 0.5) + 
+    scale_shape(solid = FALSE) + 
+    geom_line(aes(color = mut, linetype = mut), stat = "smooth", 
+              alpha = 0.8, method = "lm", 
+              show.legend = FALSE, se = FALSE, size = 0.8) + 
+    scale_color_manual(as.character(snpinfo$dbsnp_rs_id), 
+                       values = c("red", "blue", "forestgreen"), 
+                       labels = mapply(function(X, Y) {
+                         paste0(X, " (", Y, ")")
+                       }, names(genoTable), as.vector(genoTable))) + 
+    scale_shape_manual(as.character(snpinfo$dbsnp_rs_id), 
+                       values = c(0, 1, 2), 
+                       labels = mapply(function(X, Y) {
+                         paste0(X, " (", Y, ")")
+                       }, names(genoTable), as.vector(genoTable))) + 
+    scale_linetype_manual(as.character(snpinfo$dbsnp_rs_id), 
+                          values = c(1, 1, 1), 
+                          labels = mapply(function(X, Y) {
+                            paste0(X, " (", Y, ")")
+                          }, names(genoTable), as.vector(genoTable))) +
+    xlab(mir) + ylab(gene) +  
+    ggtitle(paste0(as.character(maintitle))) + 
+    theme(panel.background = element_rect(fill = "white", colour = "white"), 
+          axis.title.x = element_text(size = 10), 
+          axis.title.y = element_text(size = 10), 
+          title = element_text(size = 8),
+          axis.line.x = element_line(size = 0.5),
+          axis.line.y = element_line(size = 0.5), 
+          plot.title = element_text(hjust = 0.25),
+          legend.key.size = unit(0.35, "cm"), 
+          legend.text = element_text(size = 6), 
+          legend.box.spacing = unit(0, "cm"), 
+          legend.box.margin = margin(0, 0, 0, 0, "cm"))
   return(g)
 }
 
